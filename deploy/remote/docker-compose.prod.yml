@@ -1,0 +1,226 @@
+# 模块名: remote_docker_compose_prod
+# 功能概述: 在远程服务器以 Docker Compose 运行 Mall4cloud 中间件、微服务和统一入口。
+# 对外接口: docker compose -f deploy/remote/docker-compose.prod.yml
+# 依赖关系: deploy/remote/.env, deploy/remote/nginx.conf, 已构建的 jar 与前端 dist
+# 输入输出: 输入环境变量和构建产物，输出运行中的服务容器。
+# 异常与错误: 容器启动失败通过 docker compose logs 定位。
+# 维护说明: 使用 host 网络以匹配现有 Nacos 配置；公网只建议开放 PUBLIC_PORT。
+
+name: mall4cloud
+
+x-java-service: &java-service
+  image: eclipse-temurin:21-jre
+  restart: always
+  network_mode: "host"
+  working_dir: /workspace
+  volumes:
+    - ${MALL4CLOUD_APP_DIR:-/opt/mall4cloud}:/workspace:ro
+  environment:
+    TZ: Asia/Shanghai
+    NACOS_HOST: ${SERVER_IP:-64.90.3.109}
+    NACOS_PORT: 8848
+    JAVA_OPTS: "-Xms128m -Xmx384m -XX:+UseContainerSupport"
+  depends_on:
+    - mall4cloud-nacos
+    - mall4cloud-redis
+
+services:
+  mall4cloud-mysql:
+    image: mysql:8.0
+    container_name: mall4cloud-mysql
+    restart: always
+    network_mode: "host"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-80jpnH4.r5g}
+      TZ: Asia/Shanghai
+    volumes:
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/mysql/data:/var/lib/mysql
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/mysql/conf.d:/etc/mysql/conf.d
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/mysql/initdb:/docker-entrypoint-initdb.d:ro
+
+  mall4cloud-redis:
+    image: redis:7.0
+    container_name: mall4cloud-redis
+    restart: always
+    network_mode: "host"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-80jpnH4.r5g}
+
+  mall4cloud-minio:
+    image: minio/minio:RELEASE.2024-04-18T19-09-19Z
+    container_name: mall4cloud-minio
+    restart: always
+    network_mode: "host"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-80jpnH4.r5g}
+      MINIO_BROWSER_REDIRECT_URL: ${PUBLIC_ORIGIN:-http://64.90.3.109:6688}/minio-console
+    volumes:
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/minio/data:/data
+
+  mall4cloud-nacos:
+    image: nacos/nacos-server:v3.1.1
+    container_name: mall4cloud-nacos
+    restart: always
+    network_mode: "host"
+    depends_on:
+      - mall4cloud-mysql
+    environment:
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: ${SERVER_IP:-64.90.3.109}
+      MYSQL_SERVICE_DB_NAME: mall4cloud_nacos
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-80jpnH4.r5g}
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_TOKEN: TWFsbDRqTWFsbDRjbG91ZE1hbGw0ak1hbGw0Y2xvdWRNYWxsNGpNYWxsNGNsb3Vk
+      NACOS_AUTH_IDENTITY_KEY: mall4jmall4jmall4jmall4jmall4jmall4jmall4jmall4j
+      NACOS_AUTH_IDENTITY_VALUE: mall4cloudmall4cloudmall4cloudmall4cloudmall4cloudmall4cloudmall4cloud
+    volumes:
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/nacos/logs:/home/nacos/logs
+
+  mall4cloud-seata:
+    image: apache/seata-server:2.6.0
+    container_name: mall4cloud-seata
+    restart: always
+    network_mode: "host"
+    environment:
+      TZ: Asia/Shanghai
+      STORE_MODE: db
+      SEATA_IP: ${SERVER_IP:-64.90.3.109}
+      SEATA_PORT: 8091
+    volumes:
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/seata/application.yml:/seata-server/resources/application.yml:ro
+
+  mall4cloud-elasticsearch:
+    image: elasticsearch:7.17.21
+    container_name: mall4cloud-elasticsearch
+    restart: always
+    network_mode: "host"
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-80jpnH4.r5g}
+      xpack.security.enabled: "true"
+    volumes:
+      - ${MALL4CLOUD_APP_DIR:-/opt/mall4cloud}/doc/中间件docker-compse一键安装/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/elasticsearch/data:/usr/share/elasticsearch/data
+      - ${MALL4CLOUD_APP_DIR:-/opt/mall4cloud}/doc/中间件docker-compse一键安装/elasticsearch/plugins:/usr/share/elasticsearch/plugins:ro
+
+  mall4cloud-canal:
+    image: canal/canal-server:v1.1.7
+    container_name: mall4cloud-canal
+    restart: always
+    network_mode: "host"
+    volumes:
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/canal/conf/example:/home/admin/canal-server/conf/example:ro
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/canal/conf/canal.properties:/home/admin/canal-server/conf/canal.properties:ro
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/canal/logs:/home/admin/canal-server/logs
+
+  mall4cloud-rocketmq-namesrv:
+    image: apache/rocketmq:5.2.0
+    container_name: mall4cloud-rocketmq-namesrv
+    restart: always
+    network_mode: "host"
+    environment:
+      JAVA_OPT_EXT: "-Duser.home=/home/rocketmq -Xms256m -Xmx512m -Xmn128m"
+    command: ["sh","mqnamesrv"]
+    volumes:
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/rocketmq/namesrv/logs:/home/rocketmq/logs
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/rocketmq/namesrv/store:/home/rocketmq/store
+
+  mall4cloud-rocketmq-broker:
+    image: apache/rocketmq:5.2.0
+    container_name: mall4cloud-rocketmq-broker
+    restart: always
+    network_mode: "host"
+    depends_on:
+      - mall4cloud-rocketmq-namesrv
+    environment:
+      JAVA_OPT_EXT: "-Duser.home=/home/rocketmq -Xms256m -Xmx512m -Xmn128m -XX:-AssumeMP"
+    command: ["sh","mqbroker","-c","/etc/rocketmq/broker.conf","-n","${SERVER_IP:-64.90.3.109}:9876","autoCreateTopicEnable=true"]
+    volumes:
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/rocketmq/broker/logs:/home/rocketmq/logs
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/rocketmq/broker/store:/home/rocketmq/store
+      - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/rocketmq/broker/conf/broker.conf:/etc/rocketmq/broker.conf:ro
+
+  mall4cloud-gateway:
+    <<: *java-service
+    container_name: mall4cloud-gateway
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-gateway/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-auth:
+    <<: *java-service
+    container_name: mall4cloud-auth
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-auth/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-rbac:
+    <<: *java-service
+    container_name: mall4cloud-rbac
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-rbac/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-multishop:
+    <<: *java-service
+    container_name: mall4cloud-multishop
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-multishop/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-product:
+    <<: *java-service
+    container_name: mall4cloud-product
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-product/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-user:
+    <<: *java-service
+    container_name: mall4cloud-user
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-user/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-order:
+    <<: *java-service
+    container_name: mall4cloud-order
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-order/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-biz:
+    <<: *java-service
+    container_name: mall4cloud-biz
+    environment:
+      TZ: Asia/Shanghai
+      NACOS_HOST: ${SERVER_IP:-64.90.3.109}
+      NACOS_PORT: 8848
+      SERVER_PORT: 9107
+      JAVA_OPTS: "-Xms128m -Xmx384m -XX:+UseContainerSupport"
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-biz/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-search:
+    <<: *java-service
+    container_name: mall4cloud-search
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-search/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-leaf:
+    <<: *java-service
+    container_name: mall4cloud-leaf
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-leaf/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-platform:
+    <<: *java-service
+    container_name: mall4cloud-platform
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-platform/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-payment:
+    <<: *java-service
+    container_name: mall4cloud-payment
+    command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-payment/target/*.jar | grep -v original | head -n 1)'
+
+  mall4cloud-nginx:
+    image: nginx:1.25-alpine
+    container_name: mall4cloud-nginx
+    restart: always
+    network_mode: "host"
+    depends_on:
+      - mall4cloud-gateway
+    volumes:
+      - ${MALL4CLOUD_APP_DIR:-/opt/mall4cloud}:/workspace:ro
+      - ${MALL4CLOUD_APP_DIR:-/opt/mall4cloud}/deploy/remote/nginx.conf:/etc/nginx/conf.d/default.conf:ro

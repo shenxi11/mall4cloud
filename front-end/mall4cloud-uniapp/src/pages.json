@@ -18,6 +18,18 @@
       }
     },
     {
+      "path": "pages/live/live",
+      "style": {
+        "navigationBarTitleText": "直播"
+      }
+    },
+    {
+      "path": "pages/short-video/short-video",
+      "style": {
+        "navigationBarTitleText": "短视频"
+      }
+    },
+    {
       "path": "pages/cart/cart",
       "style": {
         "navigationBarTitleText": "购物车"
@@ -149,10 +161,16 @@
         "selectedIconPath": "/static/tabbar/index-r.png"
       },
       {
-        "pagePath": "pages/category/category",
-        "text": "分类",
-        "iconPath": "/static/tabbar/category.png",
-        "selectedIconPath": "/static/tabbar/category-r.png"
+        "pagePath": "pages/live/live",
+        "text": "直播",
+        "iconPath": "/static/images/icon-flash.png",
+        "selectedIconPath": "/static/images/icon-flash.png"
+      },
+      {
+        "pagePath": "pages/short-video/short-video",
+        "text": "短视频",
+        "iconPath": "/static/images/icon-new.png",
+        "selectedIconPath": "/static/images/icon-new.png"
       },
       {
         "pagePath": "pages/cart/cart",

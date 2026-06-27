@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.mall4j.cloud.multishop.mapper.ShortVideoMapper">
+  <!--
+    模块名: short_video_mapper_xml
+    功能概述: 维护短视频列表、详情、保存、更新和删除 SQL。
+    对外接口: ShortVideoMapper
+    依赖关系: short_video 表
+    输入输出: 输入 Mapper 参数，输出 ShortVideoVO 或写入结果。
+    异常与错误: SQL 异常由 MyBatis 向上抛出。
+    维护说明: 云点播字段接入时优先扩展表字段和 VO，保持现有 SQL 兼容。
+  -->
+  <resultMap id="shortVideoVOMap" type="com.mall4j.cloud.multishop.vo.ShortVideoVO">
+    <id column="short_video_id" property="shortVideoId"/>
+    <result column="shop_id" property="shopId"/>
+    <result column="title" property="title"/>
+    <result column="cover_url" property="coverUrl"/>
+    <result column="video_url" property="videoUrl"/>
+    <result column="description" property="description"/>
+    <result column="related_spu_id" property="relatedSpuId"/>
+    <result column="status" property="status"/>
+    <result column="view_count" property="viewCount"/>
+    <result column="like_count" property="likeCount"/>
+    <result column="seq" property="seq"/>
+    <result column="location_name" property="locationName"/>
+    <result column="longitude" property="longitude"/>
+    <result column="latitude" property="latitude"/>
+    <result column="create_time" property="createTime"/>
+    <result column="update_time" property="updateTime"/>
+  </resultMap>
+
+  <sql id="Vo_Column_List">
+    `short_video_id`,`shop_id`,`title`,`cover_url`,`video_url`,`description`,`related_spu_id`,`status`,
+    `view_count`,`like_count`,`seq`,`location_name`,`longitude`,`latitude`,`create_time`,`update_time`
+  </sql>
+
+  <select id="list" resultMap="shortVideoVOMap">
+    select <include refid="Vo_Column_List"/>
+    from short_video
+    <where>
+      <if test="shortVideoDTO.shopId != null">
+        and shop_id = #{shortVideoDTO.shopId}
+      </if>
+      <if test="shortVideoDTO.title != null and shortVideoDTO.title != ''">
+        and title like concat('%', #{shortVideoDTO.title}, '%')
+      </if>
+      <if test="shortVideoDTO.status != null">
+        and status = #{shortVideoDTO.status}
+      </if>
+    </where>
+    order by seq asc, short_video_id desc
+  </select>
+
+  <select id="getByShortVideoId" resultMap="shortVideoVOMap">
+    select <include refid="Vo_Column_List"/>
+    from short_video
+    where short_video_id = #{shortVideoId}
+  </select>
+
+  <insert id="save">
+    insert into short_video
+      (`shop_id`,`title`,`cover_url`,`video_url`,`description`,`related_spu_id`,`status`,`view_count`,
+       `like_count`,`seq`,`location_name`,`longitude`,`latitude`)
+    values
+      (#{shortVideo.shopId},#{shortVideo.title},#{shortVideo.coverUrl},#{shortVideo.videoUrl},
+       #{shortVideo.description},#{shortVideo.relatedSpuId},ifnull(#{shortVideo.status}, 1),
+       ifnull(#{shortVideo.viewCount}, 0),ifnull(#{shortVideo.likeCount}, 0),ifnull(#{shortVideo.seq}, 0),
+       #{shortVideo.locationName},#{shortVideo.longitude},#{shortVideo.latitude})
+  </insert>
+
+  <update id="update">
+    update short_video
+    set `title` = #{shortVideo.title},
+        `cover_url` = #{shortVideo.coverUrl},
+        `video_url` = #{shortVideo.videoUrl},
+        `description` = #{shortVideo.description},
+        `related_spu_id` = #{shortVideo.relatedSpuId},
+        `status` = #{shortVideo.status},
+        `view_count` = ifnull(#{shortVideo.viewCount}, 0),
+        `like_count` = ifnull(#{shortVideo.likeCount}, 0),
+        `seq` = ifnull(#{shortVideo.seq}, 0),
+        `location_name` = #{shortVideo.locationName},
+        `longitude` = #{shortVideo.longitude},
+        `latitude` = #{shortVideo.latitude}
+    where short_video_id = #{shortVideo.shortVideoId}
+      and shop_id = #{shortVideo.shopId}
+  </update>
+
+  <delete id="deleteById">
+    delete from short_video
+    where short_video_id = #{shortVideoId}
+      and shop_id = #{shopId}
+  </delete>
+
+  <select id="listEnabled" resultMap="shortVideoVOMap">
+    select <include refid="Vo_Column_List"/>
+    from short_video
+    where status = 1
+    <if test="shopId != null">
+      and shop_id = #{shopId}
+    </if>
+    order by seq asc, short_video_id desc
+  </select>
+</mapper>

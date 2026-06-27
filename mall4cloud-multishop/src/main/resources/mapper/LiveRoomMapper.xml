@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.mall4j.cloud.multishop.mapper.LiveRoomMapper">
+  <!--
+    模块名: live_room_mapper_xml
+    功能概述: 维护直播间列表、详情、保存、更新和删除 SQL。
+    对外接口: LiveRoomMapper
+    依赖关系: live_room 表
+    输入输出: 输入 Mapper 参数，输出 LiveRoomVO 或写入结果。
+    异常与错误: SQL 异常由 MyBatis 向上抛出。
+    维护说明: 第三方直播字段接入时优先扩展表字段和 VO，保持现有 SQL 兼容。
+  -->
+  <resultMap id="liveRoomVOMap" type="com.mall4j.cloud.multishop.vo.LiveRoomVO">
+    <id column="live_room_id" property="liveRoomId"/>
+    <result column="shop_id" property="shopId"/>
+    <result column="title" property="title"/>
+    <result column="cover_url" property="coverUrl"/>
+    <result column="anchor_name" property="anchorName"/>
+    <result column="live_status" property="liveStatus"/>
+    <result column="status" property="status"/>
+    <result column="start_time" property="startTime"/>
+    <result column="end_time" property="endTime"/>
+    <result column="play_url" property="playUrl"/>
+    <result column="replay_url" property="replayUrl"/>
+    <result column="related_spu_id" property="relatedSpuId"/>
+    <result column="seq" property="seq"/>
+    <result column="location_name" property="locationName"/>
+    <result column="longitude" property="longitude"/>
+    <result column="latitude" property="latitude"/>
+    <result column="create_time" property="createTime"/>
+    <result column="update_time" property="updateTime"/>
+  </resultMap>
+
+  <sql id="Vo_Column_List">
+    `live_room_id`,`shop_id`,`title`,`cover_url`,`anchor_name`,`live_status`,`status`,`start_time`,`end_time`,
+    `play_url`,`replay_url`,`related_spu_id`,`seq`,`location_name`,`longitude`,`latitude`,`create_time`,`update_time`
+  </sql>
+
+  <select id="list" resultMap="liveRoomVOMap">
+    select <include refid="Vo_Column_List"/>
+    from live_room
+    <where>
+      <if test="liveRoomDTO.shopId != null">
+        and shop_id = #{liveRoomDTO.shopId}
+      </if>
+      <if test="liveRoomDTO.title != null and liveRoomDTO.title != ''">
+        and title like concat('%', #{liveRoomDTO.title}, '%')
+      </if>
+      <if test="liveRoomDTO.liveStatus != null">
+        and live_status = #{liveRoomDTO.liveStatus}
+      </if>
+      <if test="liveRoomDTO.status != null">
+        and status = #{liveRoomDTO.status}
+      </if>
+    </where>
+    order by seq asc, live_room_id desc
+  </select>
+
+  <select id="getByLiveRoomId" resultMap="liveRoomVOMap">
+    select <include refid="Vo_Column_List"/>
+    from live_room
+    where live_room_id = #{liveRoomId}
+  </select>
+
+  <insert id="save">
+    insert into live_room
+      (`shop_id`,`title`,`cover_url`,`anchor_name`,`live_status`,`status`,`start_time`,`end_time`,
+       `play_url`,`replay_url`,`related_spu_id`,`seq`,`location_name`,`longitude`,`latitude`)
+    values
+      (#{liveRoom.shopId},#{liveRoom.title},#{liveRoom.coverUrl},#{liveRoom.anchorName},
+       ifnull(#{liveRoom.liveStatus}, 0),ifnull(#{liveRoom.status}, 1),#{liveRoom.startTime},#{liveRoom.endTime},
+       #{liveRoom.playUrl},#{liveRoom.replayUrl},#{liveRoom.relatedSpuId},ifnull(#{liveRoom.seq}, 0),
+       #{liveRoom.locationName},#{liveRoom.longitude},#{liveRoom.latitude})
+  </insert>
+
+  <update id="update">
+    update live_room
+    set `title` = #{liveRoom.title},
+        `cover_url` = #{liveRoom.coverUrl},
+        `anchor_name` = #{liveRoom.anchorName},
+        `live_status` = #{liveRoom.liveStatus},
+        `status` = #{liveRoom.status},
+        `start_time` = #{liveRoom.startTime},
+        `end_time` = #{liveRoom.endTime},
+        `play_url` = #{liveRoom.playUrl},
+        `replay_url` = #{liveRoom.replayUrl},
+        `related_spu_id` = #{liveRoom.relatedSpuId},
+        `seq` = ifnull(#{liveRoom.seq}, 0),
+        `location_name` = #{liveRoom.locationName},
+        `longitude` = #{liveRoom.longitude},
+        `latitude` = #{liveRoom.latitude}
+    where live_room_id = #{liveRoom.liveRoomId}
+      and shop_id = #{liveRoom.shopId}
+  </update>
+
+  <delete id="deleteById">
+    delete from live_room
+    where live_room_id = #{liveRoomId}
+      and shop_id = #{shopId}
+  </delete>
+
+  <select id="listEnabled" resultMap="liveRoomVOMap">
+    select <include refid="Vo_Column_List"/>
+    from live_room
+    where status = 1
+    <if test="shopId != null">
+      and shop_id = #{shopId}
+    </if>
+    order by case live_status when 1 then 0 when 0 then 1 else 2 end, seq asc, live_room_id desc
+  </select>
+</mapper>

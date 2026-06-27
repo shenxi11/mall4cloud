@@ -13,6 +13,7 @@ import eslintPlugin from 'vite-plugin-eslint'
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
   return {
+    base: process.env.VITE_APP_BASE_PATH || './',
     plugins: [
       vue(),
       createSvgIconsPlugin({
@@ -65,7 +66,6 @@ export default defineConfig(({ command }) => {
       }
     },
     build: {
-      base: './',
       rollupOptions: {
         // 静态资源分类打包
         output: {

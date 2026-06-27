@@ -57,13 +57,13 @@
       </view>
       <view
         class="item"
-        @tap="notOpen('打折特惠')"
+        @tap="toCategory"
       >
         <view class="icon">
           <image src="/static/images/icon-sale.png" />
         </view>
         <view class="text">
-          打折特惠
+          商品分类
         </view>
       </view>
       <view
@@ -490,6 +490,13 @@ const toSrearch = () => {
 const toNewProds = () => {
   uni.navigateTo({
     url: '/pages/new-prods/new-prods'
+  })
+}
+
+// 跳转商品分类
+const toCategory = () => {
+  uni.navigateTo({
+    url: '/pages/category/category'
   })
 }
 
