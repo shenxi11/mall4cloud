@@ -93,3 +93,24 @@
 - `front-end/mall4cloud-uniapp/.eslintrc-auto-import.json`：移动端 H5 构建刷新自动导入 ESLint globals。
 - `progress.md`：追加本轮施工和验证日志。
 - 回滚方式：远程未部署前可通过 `git revert <本次提交>` 回滚；若已部署，可先在服务器执行 `docker compose -f deploy/remote/docker-compose.prod.yml down` 停止容器，再回退 Git 提交并重新执行部署脚本。数据库若已初始化，需按上一条日志中的表和菜单资源回滚说明处理业务升级数据。
+
+## 2026-06-27 - Task: 远程服务器端口冲突隔离
+### What was done
+- 远程预检发现服务器已有 MariaDB 占用 `3306`，已有进程占用 `6379` 和 `9001`，原 host 网络部署会与现有服务冲突。
+- 将远程 Compose 调整为 Docker bridge 网络，MySQL、Redis、MinIO、Nacos、RocketMQ、ES、Seata、Canal 和后端微服务通过容器名互联。
+- 统一 Nginx 入口仍只发布公网 `6688`，内部中间件端口不再暴露到宿主机。
+- 部署脚本同步改写运行时配置和 Nacos 初始化 SQL，将固定内网 IP 替换为容器名，确保首次初始化后服务注册、OSS、RocketMQ、ES、Seata 等配置能在 Docker 网络内解析。
+
+### Testing
+- 已执行远程预检，确认服务器 Ubuntu、Docker、Compose、Git 可用，并确认 `/opt/mall4cloud` 尚未存在。
+- 已执行 `git diff --check`，通过；仅有 Windows 换行提示，无空白错误。
+- 已执行 `deploy/remote/docker-compose.prod.yml` YAML 解析检查，通过。
+- 尚未在远程执行完整部署；本轮提交后会由服务器拉取最新代码并执行 `deploy/remote/deploy.sh`。
+
+### Notes
+- `deploy/remote/docker-compose.prod.yml`：改为 bridge 网络和容器名互联，仅 Nginx 发布 `${PUBLIC_PORT:-6688}`。
+- `deploy/remote/deploy.sh`：改写运行时配置和初始化 SQL 的服务地址，适配 Docker 内部网络。
+- `deploy/remote/nginx.conf`：代理 upstream 从 `127.0.0.1` 改为对应容器服务名。
+- `docs/remote-deployment.md`：补充 bridge 网络隔离和只开放 `6688` 的部署说明。
+- `progress.md`：追加本轮端口冲突处理和验证记录。
+- 回滚方式：远程未部署前可通过 `git revert <本次提交>` 回滚；若已部署，可先执行 `docker compose -f deploy/remote/docker-compose.prod.yml down` 停止 Mall4cloud 容器，再回退本次提交并重新部署。该操作不会处理服务器上原有 MariaDB、Redis 或其他既有服务。

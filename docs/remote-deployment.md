@@ -4,6 +4,8 @@
 
 本项目按远程服务器部署，不在本机安装项目依赖。代码提交到 GitHub 后，服务器拉取仓库，通过 Docker 完成中间件、后端微服务和三个前端的构建与运行。
 
+远程 Compose 使用 Docker bridge 网络隔离 MySQL、Redis、MinIO、Nacos、RocketMQ、ES 等内部端口，避免占用服务器已有的 `3306`、`6379`、`9001` 等端口；公网只发布 `6688`。
+
 ## 部署入口
 
 - 服务器：`64.90.3.109`
@@ -62,4 +64,4 @@ bash deploy/remote/deploy.sh
 - 远程部署脚本会在首次初始化 MySQL 时导入基础库、Nacos 配置和直播短视频升级 SQL。
 - 后续重复执行部署脚本只会再次执行升级 SQL；该 SQL 使用 `IF NOT EXISTS` 和 `INSERT IGNORE`，可重复执行。
 - 移动端 H5 使用相对 base 构建并由 Nginx 挂载到 `/cloud/`，平台端和商家端分别使用 `/platform/`、`/multishop/` 子路径构建。
-- 业务公网只需要开放 `6688`。MySQL、Redis、Nacos、MinIO、RocketMQ、ES 等端口建议只保留服务器内网可访问。
+- 业务公网只需要开放 `6688`。MySQL、Redis、Nacos、MinIO、RocketMQ、ES 等服务默认只在 Docker 内部网络访问。

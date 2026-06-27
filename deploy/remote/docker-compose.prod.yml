@@ -4,22 +4,27 @@
 # 依赖关系: deploy/remote/.env, deploy/remote/nginx.conf, 已构建的 jar 与前端 dist
 # 输入输出: 输入环境变量和构建产物，输出运行中的服务容器。
 # 异常与错误: 容器启动失败通过 docker compose logs 定位。
-# 维护说明: 使用 host 网络以匹配现有 Nacos 配置；公网只建议开放 PUBLIC_PORT。
+# 维护说明: 使用 bridge 网络隔离中间件端口；公网只发布 PUBLIC_PORT。
 
 name: mall4cloud
 
 x-java-service: &java-service
   image: eclipse-temurin:21-jre
   restart: always
-  network_mode: "host"
+  networks:
+    - mall4cloud-net
   working_dir: /workspace
   volumes:
     - ${MALL4CLOUD_APP_DIR:-/opt/mall4cloud}:/workspace:ro
   environment:
     TZ: Asia/Shanghai
-    NACOS_HOST: ${SERVER_IP:-64.90.3.109}
+    NACOS_HOST: mall4cloud-nacos
     NACOS_PORT: 8848
-    JAVA_OPTS: "-Xms128m -Xmx384m -XX:+UseContainerSupport"
+    MYSQL_HOST: mall4cloud-mysql
+    MYSQL_PORT: 3306
+    MYSQL_USERNAME: root
+    MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-80jpnH4.r5g}
+    JAVA_OPTS: "-Xms64m -Xmx192m -XX:+UseContainerSupport"
   depends_on:
     - mall4cloud-nacos
     - mall4cloud-redis
@@ -29,7 +34,8 @@ services:
     image: mysql:8.0
     container_name: mall4cloud-mysql
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-80jpnH4.r5g}
       TZ: Asia/Shanghai
@@ -42,14 +48,16 @@ services:
     image: redis:7.0
     container_name: mall4cloud-redis
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     command: redis-server --requirepass ${REDIS_PASSWORD:-80jpnH4.r5g}
 
   mall4cloud-minio:
     image: minio/minio:RELEASE.2024-04-18T19-09-19Z
     container_name: mall4cloud-minio
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
@@ -62,7 +70,8 @@ services:
     image: nacos/nacos-server:v3.1.1
     container_name: mall4cloud-nacos
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     depends_on:
       - mall4cloud-mysql
     environment:
@@ -71,7 +80,7 @@ services:
       MODE: standalone
       PREFER_HOST_MODE: hostname
       SPRING_DATASOURCE_PLATFORM: mysql
-      MYSQL_SERVICE_HOST: ${SERVER_IP:-64.90.3.109}
+      MYSQL_SERVICE_HOST: mall4cloud-mysql
       MYSQL_SERVICE_DB_NAME: mall4cloud_nacos
       MYSQL_SERVICE_USER: root
       MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-80jpnH4.r5g}
@@ -86,11 +95,12 @@ services:
     image: apache/seata-server:2.6.0
     container_name: mall4cloud-seata
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     environment:
       TZ: Asia/Shanghai
       STORE_MODE: db
-      SEATA_IP: ${SERVER_IP:-64.90.3.109}
+      SEATA_IP: mall4cloud-seata
       SEATA_PORT: 8091
     volumes:
       - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/seata/application.yml:/seata-server/resources/application.yml:ro
@@ -99,10 +109,11 @@ services:
     image: elasticsearch:7.17.21
     container_name: mall4cloud-elasticsearch
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     environment:
       discovery.type: single-node
-      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      ES_JAVA_OPTS: "-Xms384m -Xmx384m"
       ELASTICSEARCH_USERNAME: elastic
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-80jpnH4.r5g}
       xpack.security.enabled: "true"
@@ -115,7 +126,8 @@ services:
     image: canal/canal-server:v1.1.7
     container_name: mall4cloud-canal
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     volumes:
       - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/canal/conf/example:/home/admin/canal-server/conf/example:ro
       - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/canal/conf/canal.properties:/home/admin/canal-server/conf/canal.properties:ro
@@ -125,9 +137,10 @@ services:
     image: apache/rocketmq:5.2.0
     container_name: mall4cloud-rocketmq-namesrv
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     environment:
-      JAVA_OPT_EXT: "-Duser.home=/home/rocketmq -Xms256m -Xmx512m -Xmn128m"
+      JAVA_OPT_EXT: "-Duser.home=/home/rocketmq -Xms128m -Xmx256m -Xmn64m"
     command: ["sh","mqnamesrv"]
     volumes:
       - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/rocketmq/namesrv/logs:/home/rocketmq/logs
@@ -137,12 +150,13 @@ services:
     image: apache/rocketmq:5.2.0
     container_name: mall4cloud-rocketmq-broker
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
     depends_on:
       - mall4cloud-rocketmq-namesrv
     environment:
-      JAVA_OPT_EXT: "-Duser.home=/home/rocketmq -Xms256m -Xmx512m -Xmn128m -XX:-AssumeMP"
-    command: ["sh","mqbroker","-c","/etc/rocketmq/broker.conf","-n","${SERVER_IP:-64.90.3.109}:9876","autoCreateTopicEnable=true"]
+      JAVA_OPT_EXT: "-Duser.home=/home/rocketmq -Xms192m -Xmx384m -Xmn96m -XX:-AssumeMP"
+    command: ["sh","mqbroker","-c","/etc/rocketmq/broker.conf","-n","mall4cloud-rocketmq-namesrv:9876","autoCreateTopicEnable=true"]
     volumes:
       - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/rocketmq/broker/logs:/home/rocketmq/logs
       - ${MALL4CLOUD_DATA_DIR:-/data/mall4cloud}/rocketmq/broker/store:/home/rocketmq/store
@@ -186,12 +200,6 @@ services:
   mall4cloud-biz:
     <<: *java-service
     container_name: mall4cloud-biz
-    environment:
-      TZ: Asia/Shanghai
-      NACOS_HOST: ${SERVER_IP:-64.90.3.109}
-      NACOS_PORT: 8848
-      SERVER_PORT: 9107
-      JAVA_OPTS: "-Xms128m -Xmx384m -XX:+UseContainerSupport"
     command: sh -c 'java $$JAVA_OPTS -jar $$(ls /workspace/mall4cloud-biz/target/*.jar | grep -v original | head -n 1)'
 
   mall4cloud-search:
@@ -218,9 +226,16 @@ services:
     image: nginx:1.25-alpine
     container_name: mall4cloud-nginx
     restart: always
-    network_mode: "host"
+    networks:
+      - mall4cloud-net
+    ports:
+      - "${PUBLIC_PORT:-6688}:6688"
     depends_on:
       - mall4cloud-gateway
     volumes:
       - ${MALL4CLOUD_APP_DIR:-/opt/mall4cloud}:/workspace:ro
       - ${MALL4CLOUD_APP_DIR:-/opt/mall4cloud}/deploy/remote/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+networks:
+  mall4cloud-net:
+    name: mall4cloud-net

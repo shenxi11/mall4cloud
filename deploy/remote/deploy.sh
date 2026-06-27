@@ -65,13 +65,44 @@ mkdir -p \
   "${MALL4CLOUD_DATA_DIR}/rocketmq/broker/store" \
   "${MALL4CLOUD_DATA_DIR}/rocketmq/broker/conf"
 
-replace_runtime_ip() {
-  local target="$1"
-  local server_ip_prefix="${SERVER_IP%.*}"
+chmod -R 777 \
+  "${MALL4CLOUD_DATA_DIR}/elasticsearch/data" \
+  "${MALL4CLOUD_DATA_DIR}/rocketmq" \
+  "${MALL4CLOUD_DATA_DIR}/canal" || true
 
-  find "${target}" -type f -print0 | xargs -0 sed -i \
-    -e "s/192\\.168\\.1\\.46/${SERVER_IP}/g" \
-    -e "s/preferred-networks: 192\\.168\\.1/preferred-networks: ${server_ip_prefix}/g"
+replace_runtime_config_hosts() {
+  sed -i \
+    -e "s/192\\.168\\.1\\.46:3306/mall4cloud-mysql:3306/g" \
+    -e "s/192\\.168\\.1\\.46:9876/mall4cloud-rocketmq-namesrv:9876/g" \
+    -e "s/password: root/password: ${MYSQL_ROOT_PASSWORD}/g" \
+    "${MALL4CLOUD_DATA_DIR}/seata/application.yml"
+
+  sed -i \
+    -e "s/192\\.168\\.1\\.46:3306/mall4cloud-mysql:3306/g" \
+    "${MALL4CLOUD_DATA_DIR}/canal/conf/example/instance.properties"
+
+  sed -i \
+    -e "s/192\\.168\\.1\\.46:9876/mall4cloud-rocketmq-namesrv:9876/g" \
+    "${MALL4CLOUD_DATA_DIR}/canal/conf/canal.properties"
+
+  sed -i \
+    -e "s/namesrvAddr=192\\.168\\.1\\.46:9876/namesrvAddr=mall4cloud-rocketmq-namesrv:9876/g" \
+    -e "s/brokerIP1=192\\.168\\.1\\.46/brokerIP1=mall4cloud-rocketmq-broker/g" \
+    "${MALL4CLOUD_DATA_DIR}/rocketmq/broker/conf/broker.conf"
+}
+
+replace_initdb_hosts() {
+  local initdb="$1"
+
+  find "${initdb}" -type f -name '*.sql' -print0 | xargs -0 sed -i \
+    -e "s/preferred-networks: 192\\.168\\.1/preferred-networks: 172\\./g" \
+    -e "s/host: 192\\.168\\.1\\.46/host: mall4cloud-redis/g" \
+    -e "s/default: 192\\.168\\.1\\.46:8091/default: mall4cloud-seata:8091/g" \
+    -e "s|http://192\\.168\\.1\\.46:9000/mall4cloud|${PUBLIC_ORIGIN}/minio/mall4cloud|g" \
+    -e "s|endpoint: http://192\\.168\\.1\\.46:9000|endpoint: http://mall4cloud-minio:9000|g" \
+    -e "s/name-server: 192\\.168\\.1\\.46:9876/name-server: mall4cloud-rocketmq-namesrv:9876/g" \
+    -e "s/address: 192\\.168\\.1\\.46/address: mall4cloud-elasticsearch/g" \
+    -e "s/access-key-secret: admin123456/access-key-secret: ${MINIO_ROOT_PASSWORD}/g"
 }
 
 prepare_runtime_config() {
@@ -90,9 +121,7 @@ prepare_runtime_config() {
   cp "${APP_DIR}/doc/中间件docker-compse一键安装/rocketmq/broker/conf/broker.conf" \
     "${MALL4CLOUD_DATA_DIR}/rocketmq/broker/conf/broker.conf"
 
-  replace_runtime_ip "${MALL4CLOUD_DATA_DIR}/seata"
-  replace_runtime_ip "${MALL4CLOUD_DATA_DIR}/canal/conf"
-  replace_runtime_ip "${MALL4CLOUD_DATA_DIR}/rocketmq/broker/conf"
+  replace_runtime_config_hosts
 }
 
 prepare_initdb() {
@@ -111,10 +140,7 @@ prepare_initdb() {
   cp "${APP_DIR}/doc/中间件docker-compse一键安装/mysql/initdb/mall4cloud_seata.sql" "${initdb}/910_mall4cloud_seata.sql"
   cp "${APP_DIR}/doc/中间件docker-compse一键安装/mysql/initdb/mall4cloud_nacos.sql" "${initdb}/920_mall4cloud_nacos.sql"
 
-  replace_runtime_ip "${initdb}"
-  find "${initdb}" -type f -name '*.sql' -print0 | xargs -0 sed -i \
-    -e "s|http://${SERVER_IP}:9000/mall4cloud|${PUBLIC_ORIGIN}/minio/mall4cloud|g" \
-    -e "s/access-key-secret: admin123456/access-key-secret: ${MINIO_ROOT_PASSWORD}/g"
+  replace_initdb_hosts "${initdb}"
 }
 
 prepare_runtime_config
