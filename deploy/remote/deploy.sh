@@ -131,10 +131,13 @@ prepare_initdb() {
   local idx=10
   for sql in "${APP_DIR}"/db/mall4cloud_*.sql; do
     [ "$(basename "${sql}")" = "mall4cloud-all.sql" ] && continue
+    [ "$(basename "${sql}")" = "mall4cloud_user_area_data.sql" ] && continue
     cp "${sql}" "${initdb}/$(printf '%03d' "${idx}")_$(basename "${sql}")"
     idx=$((idx + 10))
   done
 
+  cp "${APP_DIR}/db/mall4cloud_user_area_data.sql" "${initdb}/$(printf '%03d' "${idx}")_mall4cloud_user_area_data.sql"
+  idx=$((idx + 10))
   cp "${APP_DIR}/db/20260627_live_short_video_ai_upgrade.sql" "${initdb}/850_live_short_video_ai_upgrade.sql"
   cp "${APP_DIR}/doc/中间件docker-compse一键安装/mysql/initdb/mall4cloud_canal.sql" "${initdb}/900_mall4cloud_canal.sql"
   cp "${APP_DIR}/doc/中间件docker-compse一键安装/mysql/initdb/mall4cloud_seata.sql" "${initdb}/910_mall4cloud_seata.sql"
@@ -161,12 +164,12 @@ docker compose -f "${COMPOSE_FILE}" up -d \
 
 echo "Waiting for MySQL"
 for i in {1..90}; do
-  if docker exec mall4cloud-mysql mysqladmin ping -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent >/dev/null 2>&1; then
+  if docker exec mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "select 1" >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
-docker exec mall4cloud-mysql mysqladmin ping -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent >/dev/null
+docker exec mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "select 1" >/dev/null
 
 echo "Applying upgrade SQL"
 docker exec -i mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" < "${APP_DIR}/db/20260627_live_short_video_ai_upgrade.sql"

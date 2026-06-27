@@ -114,3 +114,21 @@
 - `docs/remote-deployment.md`：补充 bridge 网络隔离和只开放 `6688` 的部署说明。
 - `progress.md`：追加本轮端口冲突处理和验证记录。
 - 回滚方式：远程未部署前可通过 `git revert <本次提交>` 回滚；若已部署，可先执行 `docker compose -f deploy/remote/docker-compose.prod.yml down` 停止 Mall4cloud 容器，再回退本次提交并重新部署。该操作不会处理服务器上原有 MariaDB、Redis 或其他既有服务。
+
+## 2026-06-27 - Task: 修复远程首次 MySQL 初始化顺序
+### What was done
+- 远程首次部署验证发现 MySQL 初始化脚本先导入 `mall4cloud_user_area_data.sql`，而 `mall4cloud_user.sql` 尚未执行，导致地区数据导入时报 `Unknown database 'mall4cloud_user'`。
+- 调整初始化脚本复制顺序，显式跳过地区数据文件并在基础库 SQL 之后再复制，确保 `mall4cloud_user` 数据库先创建。
+- 将 MySQL 等待逻辑从 `mysqladmin ping` 改为使用 root 密码执行 `select 1`，避免临时初始化服务已存活但 root 密码尚不可用时提前执行升级 SQL。
+- 部署文档同步补充首次初始化顺序和 MySQL 认证就绪要求。
+
+### Testing
+- 已执行 `git diff --check`，通过；仅有 Windows 换行提示，无空白错误。
+- 已执行 `deploy/remote/docker-compose.prod.yml` YAML 解析检查，通过。
+- 远程已确认失败数据目录由本次部署在 `/data/mall4cloud/mysql/data` 新建，后续重跑前需要停止 Mall4cloud 容器并清理该失败初始化目录。
+
+### Notes
+- `deploy/remote/deploy.sh`：调整 MySQL 初始化 SQL 顺序，并等待 root 认证查询通过后继续部署。
+- `docs/remote-deployment.md`：补充首次初始化 SQL 顺序和 MySQL 认证就绪说明。
+- `progress.md`：追加本轮远程初始化失败原因、修复和验证记录。
+- 回滚方式：远程未重跑前可通过 `git revert <本次提交>` 回滚；若已重跑并重新初始化数据库，需先停止 Mall4cloud 容器，再按业务备份策略恢复或删除 `/data/mall4cloud/mysql/data` 后使用回退版本重新初始化。

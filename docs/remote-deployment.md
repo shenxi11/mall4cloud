@@ -62,6 +62,7 @@ bash deploy/remote/deploy.sh
 ## 注意事项
 
 - 远程部署脚本会在首次初始化 MySQL 时导入基础库、Nacos 配置和直播短视频升级 SQL。
+- 首次初始化会先导入 `mall4cloud_user.sql`，再导入地区数据 `mall4cloud_user_area_data.sql`；脚本会等待 MySQL root 账号可认证后再执行后续升级 SQL。
 - 后续重复执行部署脚本只会再次执行升级 SQL；该 SQL 使用 `IF NOT EXISTS` 和 `INSERT IGNORE`，可重复执行。
 - 移动端 H5 使用相对 base 构建并由 Nginx 挂载到 `/cloud/`，平台端和商家端分别使用 `/platform/`、`/multishop/` 子路径构建。
 - 业务公网只需要开放 `6688`。MySQL、Redis、Nacos、MinIO、RocketMQ、ES 等服务默认只在 Docker 内部网络访问。
