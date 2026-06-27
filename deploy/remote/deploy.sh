@@ -30,9 +30,10 @@ REDIS_PASSWORD="${REDIS_PASSWORD:-80jpnH4.r5g}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-admin}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-80jpnH4.r5g}"
 ELASTIC_PASSWORD="${ELASTIC_PASSWORD:-80jpnH4.r5g}"
+SKIP_BACKEND_BUILD="${SKIP_BACKEND_BUILD:-0}"
 
 export SERVER_IP PUBLIC_PORT PUBLIC_ORIGIN MALL4CLOUD_APP_DIR MALL4CLOUD_DATA_DIR
-export MYSQL_ROOT_PASSWORD REDIS_PASSWORD MINIO_ROOT_USER MINIO_ROOT_PASSWORD ELASTIC_PASSWORD
+export MYSQL_ROOT_PASSWORD REDIS_PASSWORD MINIO_ROOT_USER MINIO_ROOT_PASSWORD ELASTIC_PASSWORD SKIP_BACKEND_BUILD
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is required" >&2
@@ -177,19 +178,50 @@ docker exec -i mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" < "${APP
 
 docker compose -f "${COMPOSE_FILE}" up -d mall4cloud-nacos mall4cloud-seata mall4cloud-canal
 
-echo "Building backend jars"
-docker run --rm --network host \
-  -v "${APP_DIR}:/workspace" \
-  -v "${MALL4CLOUD_DATA_DIR}/cache/m2:/root/.m2" \
-  -w /workspace \
-  maven:3.9.9-eclipse-temurin-21 \
-  mvn -DskipTests package
+build_backend() {
+  if [ "${SKIP_BACKEND_BUILD}" = "1" ]; then
+    echo "Skipping backend jar build"
+    return
+  fi
+
+  echo "Building backend jars"
+  if command -v mvn >/dev/null 2>&1; then
+    (cd "${APP_DIR}" && mvn -Dmaven.repo.local="${MALL4CLOUD_DATA_DIR}/cache/m2" -DskipTests package)
+    return
+  fi
+
+  docker run --rm --network host \
+    -v "${APP_DIR}:/workspace" \
+    -v "${MALL4CLOUD_DATA_DIR}/cache/m2:/root/.m2" \
+    -w /workspace \
+    maven:3.9.9-eclipse-temurin-21 \
+    mvn -DskipTests package
+}
 
 build_frontend() {
   local dir="$1"
   local base_path="$2"
   local command="$3"
   echo "Building ${dir}"
+
+  if command -v node >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then
+    (
+      cd "${APP_DIR}/${dir}"
+      export npm_config_cache="${MALL4CLOUD_DATA_DIR}/cache/npm"
+      export VITE_APP_BASE_PATH="${base_path}"
+      export VITE_APP_BASE_API="${PUBLIC_ORIGIN}/api"
+      export VITE_APP_RESOURCES_URL="${PUBLIC_ORIGIN}/minio/mall4cloud"
+      export VITE_APP_RESOURCES_TYPE=1
+      export VITE_APP_RESOURCES_ACTION_TYPE=1
+      corepack enable
+      corepack prepare pnpm@10.33.0 --activate
+      pnpm config set store-dir "${MALL4CLOUD_DATA_DIR}/cache/pnpm"
+      pnpm install --no-frozen-lockfile --no-lockfile
+      ${command}
+    )
+    return
+  fi
+
   docker run --rm \
     -v "${APP_DIR}:/workspace" \
     -v "${MALL4CLOUD_DATA_DIR}/cache/pnpm:/cache/pnpm" \
@@ -205,6 +237,7 @@ build_frontend() {
     bash -lc "corepack enable && corepack prepare pnpm@10.33.0 --activate && pnpm config set store-dir /cache/pnpm && pnpm install --no-frozen-lockfile --no-lockfile && ${command}"
 }
 
+build_backend
 build_frontend "front-end/mall4cloud-platform" "/platform/" "pnpm build"
 build_frontend "front-end/mall4cloud-multishop" "/multishop/" "pnpm build"
 build_frontend "front-end/mall4cloud-uniapp" "./" "pnpm build:h5"

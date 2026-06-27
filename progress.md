@@ -149,3 +149,21 @@
 - `docs/remote-deployment.md`：同步更新首次初始化等待说明。
 - `progress.md`：追加本轮远程抢跑问题处理记录。
 - 回滚方式：远程未继续部署前可通过 `git revert <本次提交>` 回滚；若已部署运行，需先停止 Mall4cloud 容器，再回退提交并重新执行部署脚本。
+
+## 2026-06-27 - Task: 增加远程构建降级路径
+### What was done
+- 远程部署在拉取 `maven:3.9.9-eclipse-temurin-21` 构建镜像时长时间无新进度，新增 `SKIP_BACKEND_BUILD` 开关，允许使用已上传的后端 jar 跳过远程 Maven 构建。
+- 部署脚本改为优先使用服务器宿主机已有 Node/Corepack 和 `/data/mall4cloud/cache` 构建前端，只有宿主机缺少 Node/Corepack 时才回退到 Node Docker 镜像。
+- `.env.example` 和远程部署文档补充跳过后端构建的配置说明。
+
+### Testing
+- 已执行 `git diff --check`，通过；仅有 Windows 换行提示，无空白错误。
+- 已使用 `JAVA_HOME=E:\jdk21`、Maven `E:\apache-maven-3.9.9`、本地仓库 `E:\mall4cloud-cache\m2` 执行 `mvn -Dmaven.repo.local=E:\mall4cloud-cache\m2 -DskipTests package`，全量后端打包通过。
+- 已确认服务 jar 已在本机各服务模块 `target` 目录生成，准备通过 SFTP 上传到服务器 `/opt/mall4cloud/<service>/target/`。
+
+### Notes
+- `deploy/remote/.env.example`：新增 `SKIP_BACKEND_BUILD=0` 示例配置。
+- `deploy/remote/deploy.sh`：新增跳过后端构建开关、宿主机 Maven 优先构建逻辑和宿主机 Node/Corepack 前端构建逻辑。
+- `docs/remote-deployment.md`：补充 Docker 拉取 Maven 镜像较慢时的 jar 上传和跳过后端构建方案。
+- `progress.md`：追加本轮远程构建降级路径记录。
+- 回滚方式：远程未使用该路径前可通过 `git revert <本次提交>` 回滚；若已使用上传 jar 部署，需先停止 Mall4cloud 容器，再回退提交并按常规远程构建或重新上传 jar 部署。
