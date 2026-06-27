@@ -163,13 +163,14 @@ docker compose -f "${COMPOSE_FILE}" up -d \
   mall4cloud-rocketmq-broker
 
 echo "Waiting for MySQL"
+mysql_ready_query="select concat(@@port, ':', count(*)) from information_schema.schemata where schema_name in ('mall4cloud_auth','mall4cloud_biz','mall4cloud_leaf','mall4cloud_multishop','mall4cloud_nacos','mall4cloud_order','mall4cloud_payment','mall4cloud_platform','mall4cloud_product','mall4cloud_rbac','mall4cloud_seata','mall4cloud_user')"
 for i in {1..90}; do
-  if docker exec mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "select 1" >/dev/null 2>&1; then
+  if [ "$(docker exec mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -Nse "${mysql_ready_query}" 2>/dev/null || true)" = "3306:12" ]; then
     break
   fi
   sleep 2
 done
-docker exec mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "select 1" >/dev/null
+[ "$(docker exec mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -Nse "${mysql_ready_query}")" = "3306:12" ]
 
 echo "Applying upgrade SQL"
 docker exec -i mall4cloud-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" < "${APP_DIR}/db/20260627_live_short_video_ai_upgrade.sql"

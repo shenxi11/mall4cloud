@@ -132,3 +132,20 @@
 - `docs/remote-deployment.md`：补充首次初始化 SQL 顺序和 MySQL 认证就绪说明。
 - `progress.md`：追加本轮远程初始化失败原因、修复和验证记录。
 - 回滚方式：远程未重跑前可通过 `git revert <本次提交>` 回滚；若已重跑并重新初始化数据库，需先停止 Mall4cloud 容器，再按业务备份策略恢复或删除 `/data/mall4cloud/mysql/data` 后使用回退版本重新初始化。
+
+## 2026-06-27 - Task: 修复远程 MySQL 临时初始化抢跑
+### What was done
+- 远程重跑发现 MySQL root 密码可认证时，官方镜像仍可能处于临时初始化服务阶段，手动升级 SQL 会早于全部基础库导入而失败。
+- 将部署脚本的 MySQL 等待条件改为 `@@port=3306` 且 12 个基础 schema 均存在，确认进入最终服务进程后再执行后续升级 SQL。
+- 部署文档同步调整为等待最终服务端口和基础 schema 就绪。
+
+### Testing
+- 已通过远程 MySQL 日志确认初始化顺序为基础库、`mall4cloud_user.sql`、地区数据、直播短视频升级、Canal、Seata、Nacos。
+- 已通过远程 SQL 查询确认 `mall4cloud_auth`、`mall4cloud_biz`、`mall4cloud_leaf`、`mall4cloud_multishop`、`mall4cloud_nacos`、`mall4cloud_order`、`mall4cloud_payment`、`mall4cloud_platform`、`mall4cloud_product`、`mall4cloud_rbac`、`mall4cloud_seata`、`mall4cloud_user` 均已存在。
+- 已通过远程 SQL 查询确认 `mall4cloud_multishop.live_room` 和 `mall4cloud_multishop.short_video` 已存在。
+
+### Notes
+- `deploy/remote/deploy.sh`：MySQL 等待条件改为最终端口和基础 schema 双重检查。
+- `docs/remote-deployment.md`：同步更新首次初始化等待说明。
+- `progress.md`：追加本轮远程抢跑问题处理记录。
+- 回滚方式：远程未继续部署前可通过 `git revert <本次提交>` 回滚；若已部署运行，需先停止 Mall4cloud 容器，再回退提交并重新执行部署脚本。
